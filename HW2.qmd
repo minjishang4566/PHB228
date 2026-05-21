@@ -1,0 +1,91 @@
+---
+title: "HW2"
+author: "Xinyi Shang"
+format: html
+editor: visual
+---
+
+## Part 1:
+
+### 1.1
+
+```{r}
+#(a)
+head(mtcars)
+model1=lm(mpg~ wt + hp, data=mtcars)
+summary(model1)
+```
+
+```{r}
+#(b)
+# Basic diagnostic plots
+par(mfrow = c(1, 2))
+plot(model1)
+```
+
+```{r}
+#(c)
+car::vif(model1)
+```
+
+The VIF values for all predictors were below 5, indicating that there is no serious multicollinearity among the explanatory variables.
+
+```{r}
+#(d)
+model2=lm(mpg~ wt*hp, data=mtcars)
+anova(model1,model2)
+```
+
+I prefer the interaction model, after adding the interaction to the model, RSS decrease dramatically and P value smaller than 0.001.
+
+The interaction between wt and hp significantly improves the model. Therefore, there is strong evidence of an interaction effect between weight and horsepower on mpg.
+
+### 1.2
+
+```{r}
+data(biopsy, package = "MASS")
+biopsy <- na.omit(biopsy)
+biopsy$class <- factor(biopsy$class,
+ levels =c("benign","malignant"))
+```
+
+```{r}
+#(a)
+boxplot(V1 ~ class, data = biopsy)
+
+```
+
+V1 is much higher in malignant group and shows strong separation, The median V1 value for malignant cases is substantially higher than that of benign cases. Additionally, there is minimal overlap between the two distributions,indicating strong predictive power for tumor classification.
+
+```{r}
+#(b)
+logit <- glm(class ~ V1 + V2 + V3, data = biopsy, family = binomial)
+summary(logit)
+exp(coef(logit)) 
+```
+
+```{r}
+#(c)
+prob <- predict(logit, type = "response")
+pred <- ifelse(prob > 0.5, "malignant", "benign")
+cm <- table(Predicted = pred, Actual = biopsy$class)
+cm
+accuracy <- sum(diag(cm)) / sum(cm)
+
+sensitivity <- cm[2,2] / sum(cm[2, ])
+
+specificity <- cm[1,1] / sum(cm[1, ])
+
+print(accuracy)
+print(sensitivity)
+print(specificity)           
+```
+
+```{r}
+#(d)
+library(tidyverse)
+newdata <- tibble(V1=5, V2=4,V3=4)
+predict(logit, newdata, type="response")
+```
+
+For a new tumor with V1 = 5, V2 = 4, and V3 = 4, the predicted probability of malignancy is 0.666. Since this exceeds the 0.5 threshold, the model classifies it as malignant. This result is consistent with the positive coefficients on all three predictors: higher cytological scores are associated with greater odds of malignancy.

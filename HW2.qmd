@@ -1,5 +1,5 @@
 ---
-title: "HW2"
+title: "PHB228_HW2"
 author: "Xinyi Shang"
 format: html
 editor: visual
@@ -12,33 +12,36 @@ editor: visual
 ```{r}
 #(a)
 head(mtcars)
-model1=lm(mpg~ wt + hp, data=mtcars)
+model1 <- lm(mpg ~ wt + hp, data = mtcars)
 summary(model1)
 ```
 
+The intercept (37.23) is predicted mpg when wt and hp are zero. Each 1,000 lb increase in weight reduces mpg by 3.88, holding hp constant (p \< 0.001). Each unit increase in hp reduces mpg by 0.032, holding wt constant (p \< 0.001). The model explains 82.7% of variance in mpg.
+
 ```{r}
 #(b)
-# Basic diagnostic plots
 par(mfrow = c(1, 2))
-plot(model1)
+plot(model1, which = 1, main = "Residuals vs Fitted")
+plot(model1, which = 2, main = "Normal Q-Q")
+par(mfrow = c(1, 1))
 ```
+
+Residuals vs Fitted: points scatter around zero with no strong pattern, supporting linearity. Normal Q-Q: points follow the diagonal closely, residuals are approximately normal. A few tail observations deviate slightly but are not severe.
 
 ```{r}
 #(c)
 car::vif(model1)
 ```
 
-The VIF values for all predictors were below 5, indicating that there is no serious multicollinearity among the explanatory variables.
+VIF values are below 5, indicating no serious multicollinearity. Both predictors can be retained with stable estimates.
 
 ```{r}
 #(d)
-model2=lm(mpg~ wt*hp, data=mtcars)
-anova(model1,model2)
+model2 <- lm(mpg ~ wt * hp, data = mtcars)
+anova(model1, model2)
 ```
 
-I prefer the interaction model, after adding the interaction to the model, RSS decrease dramatically and P value smaller than 0.001.
-
-The interaction between wt and hp significantly improves the model. Therefore, there is strong evidence of an interaction effect between weight and horsepower on mpg.
+I prefer the interaction model. RSS drops and the ANOVA p-value is below 0.05, so the interaction significantly improves fit. The negative interaction term suggests the weight penalty on mpg is larger at higher horsepower.
 
 ### 1.2
 
@@ -46,46 +49,337 @@ The interaction between wt and hp significantly improves the model. Therefore, t
 data(biopsy, package = "MASS")
 biopsy <- na.omit(biopsy)
 biopsy$class <- factor(biopsy$class,
- levels =c("benign","malignant"))
+  levels = c("benign", "malignant"))
 ```
 
 ```{r}
 #(a)
-boxplot(V1 ~ class, data = biopsy)
-
+library(ggplot2)
+ggplot(biopsy, aes(x = class, y = V1, fill = class)) +
+  geom_boxplot(alpha = 0.7) +
+  scale_fill_manual(values = c("benign" = "#0072B2", "malignant" = "#E69F00")) +
+  labs(title = "Cell Thickness (V1) by Tumor Class",
+       x = "Class", y = "V1") +
+  theme_minimal() +
+  theme(legend.position = "none")
 ```
 
-V1 is much higher in malignant group and shows strong separation, The median V1 value for malignant cases is substantially higher than that of benign cases. Additionally, there is minimal overlap between the two distributions,indicating strong predictive power for tumor classification.
+V1 is substantially higher in the malignant group with minimal overlap between distributions, indicating strong predictive power for classification.
 
 ```{r}
 #(b)
 logit <- glm(class ~ V1 + V2 + V3, data = biopsy, family = binomial)
 summary(logit)
-exp(coef(logit)) 
+exp(cbind(OR = coef(logit), confint(logit)))
 ```
 
 ```{r}
 #(c)
 prob <- predict(logit, type = "response")
 pred <- ifelse(prob > 0.5, "malignant", "benign")
+pred <- factor(pred, levels = c("benign", "malignant"))
 cm <- table(Predicted = pred, Actual = biopsy$class)
 cm
-accuracy <- sum(diag(cm)) / sum(cm)
 
-sensitivity <- cm[2,2] / sum(cm[2, ])
+TP <- cm["malignant", "malignant"]
+TN <- cm["benign",    "benign"]
+FP <- cm["malignant", "benign"]
+FN <- cm["benign",    "malignant"]
 
-specificity <- cm[1,1] / sum(cm[1, ])
+accuracy    <- (TP + TN) / sum(cm)
+sensitivity <- TP / (TP + FN)
+specificity <- TN / (TN + FP)
 
 print(accuracy)
 print(sensitivity)
-print(specificity)           
+print(specificity)
 ```
+
+The model achieves high accuracy (\>95%). High sensitivity means few malignant cases are missed. High specificity means few benign cases are misclassified.
 
 ```{r}
 #(d)
 library(tidyverse)
-newdata <- tibble(V1=5, V2=4,V3=4)
-predict(logit, newdata, type="response")
+newdata <- tibble(V1 = 5, V2 = 4, V3 = 4)
+predict(logit, newdata, type = "response")
 ```
 
-For a new tumor with V1 = 5, V2 = 4, and V3 = 4, the predicted probability of malignancy is 0.666. Since this exceeds the 0.5 threshold, the model classifies it as malignant. This result is consistent with the positive coefficients on all three predictors: higher cytological scores are associated with greater odds of malignancy.
+The predicted probability is \~0.67, above the 0.5 threshold, so the model classifies this as malignant. Higher cytological scores increase the odds of malignancy.
+
+## Part 2:
+
+```{r}
+#(a)
+library(lme4)
+set.seed(123)
+n_participants <- 20
+n_items        <- 15
+n_conditions   <- 2
+
+dat <- expand.grid(
+  participant = factor(1:n_participants),
+  item        = factor(1:n_items),
+  condition   = c("control", "treatment")
+)
+
+participant_fx <- rep(rnorm(n_participants, 0, 30), each = n_items * 2)
+item_fx        <- rep(rep(rnorm(n_items, 0, 20), each = 2), times = n_participants)
+
+dat$rt <- 500 +
+  ifelse(dat$condition == "treatment", -40, 0) +
+  participant_fx +
+  item_fx +
+  rnorm(nrow(dat), 0, 40)
+
+head(dat)
+```
+
+```{r}
+#(b)
+m1 <- lm(rt ~ condition, data = dat)
+m2 <- lmer(rt ~ condition + (1 | participant), data = dat, REML = FALSE)
+m3 <- lmer(rt ~ condition + (1 | participant) + (1 | item), data = dat, REML = FALSE)
+
+AIC(m1, m2, m3)
+anova(m2, m3)
+```
+
+Model 3 has the lowest AIC and the LRT is significant (p \< 0.05), confirming both participant and item variance are present. Ignoring either source of clustering underestimates standard errors and inflates Type I error.
+
+```{r}
+#(c)
+summary(m3)$coefficients
+
+vc <- as.data.frame(VarCorr(m3))
+var_participant <- vc[vc$grp == "participant", "vcov"]
+var_item        <- vc[vc$grp == "item",        "vcov"]
+var_residual    <- vc[vc$grp == "Residual",    "vcov"]
+
+ICC <- var_participant / (var_participant + var_item + var_residual)
+cat("ICC (participant):", round(ICC, 3), "\n")
+```
+
+The `conditiontreatment` estimate is the average RT difference between conditions. ICC shows what proportion of total variance comes from between-participant differences, justifying random participant effects.
+
+```{r}
+#(d)
+m4 <- lmer(rt ~ condition + (1 + condition | participant) + (1 | item),
+           data = dat, REML = FALSE)
+anova(m3, m4)
+```
+
+If the LRT p \< 0.05, participants differ in their condition effect and m4 is preferred. If not, the simpler m3 avoids overfitting.
+
+```{r}
+#(e)
+dat_summary <- dat |>
+  group_by(participant, condition) |>
+  summarise(mean_rt = mean(rt), .groups = "drop")
+
+ggplot(dat_summary, aes(x = condition, y = mean_rt, group = participant)) +
+  geom_line(alpha = 0.4, color = "steelblue") +
+  geom_point(alpha = 0.5, color = "steelblue", size = 1.5) +
+  stat_summary(aes(group = 1), fun = mean, geom = "line",
+               color = "black", linewidth = 1.2) +
+  labs(title = "Individual Participant RT by Condition",
+       subtitle = "Black = group mean",
+       x = "Condition", y = "Mean RT (ms)") +
+  theme_minimal()
+```
+
+## part 3:
+
+### **3.1**
+
+```{r}
+library(palmerpenguins)
+library(ggplot2)
+
+theme_penguin <- theme_minimal(base_size = 12) +
+  theme(
+    plot.title       = element_text(face = "bold", size = 14),
+    strip.text       = element_text(face = "bold"),
+    panel.grid.minor = element_blank(),
+    legend.position  = "bottom",
+    axis.title       = element_text(size = 11),
+    legend.title     = element_text(face = "bold"),
+    axis.text        = element_text(color = "grey30"),
+    plot.background  = element_rect(fill = "white", color = NA)
+  )
+```
+
+### 3.2
+
+```{r}
+ggplot(na.omit(penguins), aes(x = bill_length_mm, y = flipper_length_mm)) +
+  geom_point(aes(color = sex), alpha = 0.6, size = 2) +
+  geom_smooth(method = "lm", se = TRUE, color = "black", linewidth = 0.5) +
+  facet_wrap(~ species, scales = "free") +
+  scale_color_manual(values = c("female" = "#E69F00", "male" = "#0072B2")) +
+  labs(x = "Bill Length (mm)", y = "Flipper Length (mm)", color = "Sex",
+       title = "Bill vs Flipper Length by Species") +
+  theme_penguin
+```
+
+### 3.3
+
+```{r}
+ggplot(na.omit(penguins), aes(x = species, y = body_mass_g, fill = sex)) +
+  geom_boxplot(position = position_dodge(0.8), alpha = 0.7) +
+  scale_fill_manual(values = c("female" = "#E69F00", "male" = "#0072B2")) +
+  scale_y_continuous(limits = c(0, NA)) +
+  labs(title = "Body Mass by Species and Sex",
+       x = "Species", y = "Body Mass (g)", fill = "Sex") +
+  theme_penguin
+```
+
+### 3.4
+
+```{r}
+ggplot(na.omit(penguins),
+       aes(x = flipper_length_mm, y = body_mass_g, color = species)) +
+  geom_point(aes(size = bill_length_mm), alpha = 0.5, na.rm = TRUE) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 1, na.rm = TRUE) +
+  scale_color_manual(values = c("Adelie" = "#E69F00",
+                                "Chinstrap" = "#0072B2",
+                                "Gentoo" = "#009E73")) +
+  labs(x = "Flipper Length (mm)", y = "Body Mass (g)",
+       color = "Species", size = "Bill Length (mm)",
+       title = "Flipper Length, Body Mass, and Bill Length by Species") +
+  theme_penguin
+```
+
+Gentoo penguins are the largest overall, with longer flippers and greater body mass. Within each species, flipper length and body mass are positively related, consistent with allometric scaling. Adelie and Chinstrap penguins are smaller and overlap more. Bill length tends to be larger in Gentoo penguins, suggesting correlated morphological traits across species.
+
+## part4
+
+```{r eval=FALSE}
+library(shiny)
+
+# Enhancement: sliderInput to filter by cylinder count.
+# Users can check if the predictor-mpg relationship holds within 4-, 6-, or 8-cylinder subgroups.
+# This reveals whether engine size confounds the association between the selected predictor and mpg.
+
+ui <- fluidPage(
+  titlePanel("mtcars Explorer"),
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("predictor", "Predictor Variable",
+                  choices = c("wt", "hp", "disp", "drat")),
+      sliderInput("cyl_filter", "Number of Cylinders",
+                  min = 4, max = 8, value = c(4, 8), step = 2)
+    ),
+    mainPanel(
+      plotOutput("scatter"),
+      verbatimTextOutput("model_summary")
+    )
+  )
+)
+
+server <- function(input, output) {
+
+  filtered_data <- reactive({
+    mtcars[mtcars$cyl >= input$cyl_filter[1] &
+           mtcars$cyl <= input$cyl_filter[2], ]
+  })
+
+  fitted_model <- reactive({
+    lm(as.formula(paste("mpg ~", input$predictor)),
+       data = filtered_data())
+  })
+
+  output$scatter <- renderPlot({
+    df <- filtered_data()
+    ggplot(df, aes(x = .data[[input$predictor]], y = mpg)) +
+      geom_point(size = 2.5, alpha = 0.7) +
+      geom_smooth(method = "lm", se = TRUE, color = "#0072B2") +
+      labs(title = paste("mpg vs", input$predictor),
+           x = input$predictor, y = "mpg") +
+      theme_minimal()
+  })
+
+  output$model_summary <- renderPrint({
+    summary(fitted_model())
+  })
+}
+
+shinyApp(ui, server)
+```
+
+## part5
+
+### 5.1:
+
+```{r}
+#(a)
+library(parallel)
+library(microbenchmark)
+logical_cores  <- detectCores(logical = TRUE)
+physical_cores <- detectCores(logical = FALSE)
+
+cat("Logical cores: ", logical_cores,  "\n")
+cat("Physical cores:", physical_cores, "\n")
+
+safe_cores <- max(1, physical_cores - 1)
+cat("safe_cores:", safe_cores, "\n")
+```
+
+`safe_cores` uses physical cores minus one. Hyperthreaded logical cores give little benefit for CPU-bound tasks. Keeping one core free prevents the OS from freezing during computation.
+
+```{r}
+#(b)
+slow_mean <- function(x) {
+  Sys.sleep(0.01)
+  mean(x)
+}
+
+vecs <- replicate(100, rnorm(1000), simplify = FALSE)
+
+bm <- microbenchmark(
+  sequential = lapply(vecs, slow_mean),
+  parallel   = mclapply(vecs, slow_mean, mc.cores = safe_cores),
+  times = 3
+)
+
+print(bm)
+```
+
+### 5.2
+
+```{r}
+#(a)
+bootstrap_ci_sequential <- function(data, n_bootstrap = 1000, confidence = 0.95) {
+  stats <- replicate(n_bootstrap, mean(sample(data, replace = TRUE)))
+  alpha <- 1 - confidence
+  setNames(quantile(stats, c(alpha / 2, 1 - alpha / 2)), c("lower", "upper"))
+}
+
+#(b)
+bootstrap_ci_parallel <- function(data, n_bootstrap = 1000, confidence = 0.95) {
+  cl <- makeCluster(safe_cores)
+  stats <- parSapply(cl, seq_len(n_bootstrap),
+                     function(i) mean(sample(data, replace = TRUE)))
+  stopCluster(cl)
+  alpha <- 1 - confidence
+  setNames(quantile(stats, c(alpha / 2, 1 - alpha / 2)), c("lower", "upper"))
+}
+
+#(c)
+results <- lapply(c(500, 1000, 2000), function(n) {
+  t_seq <- system.time(
+    bootstrap_ci_sequential(mtcars$mpg, n_bootstrap = n)
+  )["elapsed"]
+  t_par <- system.time(
+    bootstrap_ci_parallel(mtcars$mpg, n_bootstrap = n)
+  )["elapsed"]
+  data.frame(n_bootstrap  = n,
+             sequential_s = round(t_seq, 3),
+             parallel_s   = round(t_par, 3),
+             speedup      = round(t_seq / t_par, 2))
+})
+
+summary_df <- do.call(rbind, results)
+print(summary_df)
+```
+
+At n = 500, parallel is sometimes slower due to cluster startup overhead. Speedup increases with n and approaches `safe_cores`× at n = 2000. For heavier statistics like model fitting, the parallel advantage appears at smaller n.
